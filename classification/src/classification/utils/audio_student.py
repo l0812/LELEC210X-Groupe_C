@@ -184,10 +184,10 @@ class AudioUtil:
         :param fs2: The sampling frequency.
         """
         ### TO COMPLETE
-        L = len(y)
-        y = y[: L - L % Nft]
-        L = len(y)
-        audiomat = np.reshape(y, (L // Nft, Nft))
+        L = len(audio)
+        audio = audio[: L - L % Nft]
+        L = len(audio)
+        audiomat = np.reshape(audio, (L // Nft, Nft))
         audioham = audiomat * np.hamming(Nft)
         z = np.reshape(audioham, -1)
         stft = np.fft.fft(audioham, axis=1)
