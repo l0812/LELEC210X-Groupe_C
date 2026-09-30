@@ -219,8 +219,8 @@ class AudioUtil:
         """
         ### TO COMPLETE
         M = audio[1] // fs2
-        audio_res = resample(audio,fs2)[0]
-        stft = specgram(audio_res, Nft)
+        audio_res = AudioUtil.resample(audio, newsr=fs2)
+        stft = AudioUtil.specgram(audio_res, Nft)
         mels = librosa.filters.mel(
             sr=fs2, n_fft=Nft, n_mels=Nmel
         )
