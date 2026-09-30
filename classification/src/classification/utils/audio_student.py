@@ -63,7 +63,8 @@ class AudioUtil:
         :param newsr: The target sampling frequency.
         """
         sig, sr = audio
-
+        M = int(sr / newsr)
+        resig = sig[::M]  # Downsample the signal by taking every M-th sample
         ### TO COMPLETE
 
         return (resig, newsr)
@@ -183,7 +184,14 @@ class AudioUtil:
         :param fs2: The sampling frequency.
         """
         ### TO COMPLETE
-        # stft /= float(2**8)
+        L = len(y)
+        y = y[: L - L % Nft]
+        L = len(y)
+        audiomat = np.reshape(y, (L // Nft, Nft))
+        audioham = audiomat * np.hamming(Nft)
+        z = np.reshape(audioham, -1)
+        stft = np.fft.fft(audioham, axis=1)
+        stft = np.abs(stft[:, : Nft // 2].T)
         return stft
 
     def get_hz2mel(fs2=11025, Nft=512, Nmel=20) -> ndarray:
@@ -210,6 +218,16 @@ class AudioUtil:
         :param fs2: The sampling frequency.
         """
         ### TO COMPLETE
+        M = audio[1] // fs2
+        audio_res = resample(audio,fs2)[0]
+        stft = specgram(audio_res, Nft)
+        mels = librosa.filters.mel(
+            sr=fs2, n_fft=Nft, n_mels=Nmel
+        )
+        
+        mels = mels[:, :-1]    #257 -> 256
+        mels = mels / np.max(mels)
+        melspec = np.dot(mels, stft)
 
         return melspec
 
