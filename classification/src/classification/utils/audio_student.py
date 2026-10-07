@@ -1,4 +1,5 @@
 import random
+from scipy import signal
 
 import librosa
 import matplotlib.pyplot as plt
@@ -7,7 +8,7 @@ import sounddevice as sd
 import soundfile as sf
 from matplotlib import patches
 from numpy import ndarray
-from scipy.signal import fftconvolve
+from scipy.signal import fftconvolve, stft
 
 # -----------------------------------------------------------------------------
 """
@@ -65,6 +66,9 @@ class AudioUtil:
         sig, sr = audio
 
         ### TO COMPLETE
+        M = sr / newsr
+        resig = signal.resample(sig, int(len(sig) / M))
+        
 
         return (resig, newsr)
 
@@ -110,7 +114,12 @@ class AudioUtil:
 
         ### TO COMPLETE
 
-        return audio
+
+        factor = random.uniform(1 / scaling_limit, scaling_limit) #choisire facteur
+        sig = sig * factor #appliquer facteur
+
+
+        return (sig, sr) #remplace audio
 
     def add_noise(audio, sigma=0.05) -> tuple[ndarray, int]:
         """
@@ -123,7 +132,12 @@ class AudioUtil:
 
         ### TO COMPLETE
 
-        return audio
+        noise = sigma * np.random.randn(len(sig)) #creer bruit random
+        sig = sig + noise
+
+
+
+        return (sig, sr) #remplace audio
 
     def echo(audio, nechos=2) -> tuple[ndarray, int]:
         """
@@ -154,10 +168,24 @@ class AudioUtil:
 
         ### TO COMPLETE
 
+
+
+        spectrum = np.fft.fft(sig) #Fast fourier transform
+
+        filt = np.asarray(filt) #transformation en tableau
+
+        if len(sig) % 2 == 0:
+            filt_full = np.concatenate((filt, np.conj(filt[-2:0:-1]))) #partie negative!
+        else:
+            filt_full = np.concatenate((filt, np.conj(filt[-1:0:-1]))) #longueur impare
+
+
+        spectrum = spectrum * filt_full
+        sig = np.real(np.fft.ifft(spectrum)) #GARDER partie reel de la transformation inverse
         return (sig, sr)
 
     def add_bg(
-        self, dataset, num_sources=1, max_ms=5000, amplitude_limit=0.1
+        audio, dataset, num_sources=1, max_ms=5000, amplitude_limit=0.1   #rempalce self par audio parce que ca marchait pas
     ) -> tuple[ndarray, int]:
         """
         Adds up sounds uniformly chosen at random to audio.
@@ -171,8 +199,26 @@ class AudioUtil:
         sig, sr = audio
 
         ### TO COMPLETE
+        sig = sig.copy() #copie du signal
 
-        return audio
+        for _ in range(num_sources):  #ajputer chaque source
+            cls = random.choice(dataset.list_classes()) #choisir classe aleatoire
+            idx = random.randint(0, dataset.naudio[cls] - 1) #choisir index aleatoire
+            bg = AudioUtil.open(dataset[cls, idx]) #ouvrir le son
+            bg = AudioUtil.resample(bg, sr) #reechantilloner le son a la meme frequence que le signal
+            bg , _ = AudioUtil.pad_trunc(bg, max_ms) #pad ou tronquer le son en terme de duree
+            bg = np.pad(bg[:len(sig)], (0, max(0, len(sig) - len(bg)))) #pad le son pour qu'il ait la meme longueur que le signal en terme de tableau
+            peak = np.max(np.abs(bg)) #trouver le pic du son
+
+            if peak > 0:
+                bg = bg / peak * amplitude_limit #fix ampli max fond
+                sig = sig + bg #ajouter le son au signal
+
+
+
+
+
+        return (sig, sr) #remplace audio
 
     def specgram(audio, Nft=512, fs2=11025) -> ndarray:
         """
@@ -183,6 +229,21 @@ class AudioUtil:
         :param fs2: The sampling frequency.
         """
         ### TO COMPLETE
+
+
+        audio = AudioUtil.resample(audio, fs2) #reechantilloner le son a fs2
+        y, _ = audio #recup echantillon et retirer frequence
+
+        L = len(y)
+        y = y[: L - L % Nft]
+        L = len(y)
+
+        audiomat = np.reshape(y, (L // Nft, Nft))
+        audioham = audiomat * np.hamming(Nft)
+        stft = np.fft.fft(audioham, axis=1)
+        stft = np.abs(stft[:, : Nft // 2].T)
+
+
         # stft /= float(2**8)
         return stft
 
@@ -210,6 +271,10 @@ class AudioUtil:
         :param fs2: The sampling frequency.
         """
         ### TO COMPLETE
+
+        stft = AudioUtil.specgram(audio, Nft, fs2)
+        mels = AudioUtil.get_hz2mel(fs2, Nft, Nmel)
+        melspec = np.dot(mels, stft)
 
         return melspec
 
