@@ -8,6 +8,10 @@ import soundfile as sf
 from matplotlib import patches
 from numpy import ndarray
 from scipy.signal import fftconvolve
+from scipy import signal
+
+
+
 
 # -----------------------------------------------------------------------------
 """
@@ -66,6 +70,9 @@ class AudioUtil:
 
         ### TO COMPLETE
 
+        new_length = int(len(sig) * newsr / sr)
+        resig = signal.resample(sig, new_length)
+        
         return (resig, newsr)
 
     def pad_trunc(audio, max_ms) -> tuple[ndarray, int]:
@@ -110,6 +117,9 @@ class AudioUtil:
 
         ### TO COMPLETE
 
+        scale = random.uniform(1 / scaling_limit, scaling_limit)
+        sig = sig * scale
+
         return audio
 
     def add_noise(audio, sigma=0.05) -> tuple[ndarray, int]:
@@ -122,7 +132,10 @@ class AudioUtil:
         sig, sr = audio
 
         ### TO COMPLETE
+        noise = np.random.normal(0,sigma,size=sig.shape)
 
+        sig = sig + noise
+        
         return audio
 
     def echo(audio, nechos=2) -> tuple[ndarray, int]:
@@ -153,11 +166,25 @@ class AudioUtil:
         sig, sr = audio
 
         ### TO COMPLETE
+        N = len(sig)
 
-        return (sig, sr)
+        spectrum = np.fft.rfft(sig)
 
-    def add_bg(
-        self, dataset, num_sources=1, max_ms=5000, amplitude_limit=0.1
+        filt = np.asarray(filt, dtype=np.float32)
+
+        old_x = np.linspace(0,1,len(filt))
+
+        new_x = np.linspace(0,1,len(spectrum))
+
+        filt_interp = np.interp(new_x,old_x,filt)
+
+        spectrum_filtered = spectrum * filt_interp
+
+        sig_filtered = np.fft.irfft(spectrum_filtered,n=N)
+
+        return (sig_filtered, sr)
+
+    def add_bg(audio, dataset, num_sources=1, max_ms=5000, amplitude_limit=0.1
     ) -> tuple[ndarray, int]:
         """
         Adds up sounds uniformly chosen at random to audio.
@@ -171,8 +198,39 @@ class AudioUtil:
         sig, sr = audio
 
         ### TO COMPLETE
+        classnames = dataset.list_classes()
 
-        return audio
+        for _ in range(num_sources):
+
+            classname = random.choice(classnames)
+
+            idx = random.randint(
+                0,
+                dataset.naudio[classname] - 1
+            )
+
+            bg = AudioUtil.open(dataset[(classname, idx)])
+
+            bg = AudioUtil.resample(bg, sr)
+
+            bg = AudioUtil.pad_trunc(bg, max_ms)
+
+            bg_sig, _ = bg
+
+            if len(bg_sig) > len(sig):
+                bg_sig = bg_sig[:len(sig)]
+            elif len(bg_sig) < len(sig):
+                bg_sig = np.pad(
+                    bg_sig,
+                    (0, len(sig) - len(bg_sig))
+                )
+
+            amplitude = random.uniform(0, amplitude_limit)
+
+            sig = sig + amplitude * bg_sig
+
+        return (sig, sr)
+
 
     def specgram(audio, Nft=512, fs2=11025) -> ndarray:
         """
@@ -184,6 +242,15 @@ class AudioUtil:
         """
         ### TO COMPLETE
         # stft /= float(2**8)
+        L = len(audio)
+        audio_res = audio[:L - L % Nft]
+        L = len(audio_res)
+        audiomat = np.reshape(audio_res, (L // Nft, Nft))
+        audioham = audiomat * np.hamming(Nft)  #fenêtre de Hamming, limite les effets de bord.
+        stft = np.fft.fft(audioham, axis=1)
+        stft = np.abs(stft[:, :Nft // 2])
+        stft = stft.T
+        
         return stft
 
     def get_hz2mel(fs2=11025, Nft=512, Nmel=20) -> ndarray:
@@ -210,7 +277,29 @@ class AudioUtil:
         :param fs2: The sampling frequency.
         """
         ### TO COMPLETE
+        sig, sr = audio
 
+        audio = AudioUtil.resample(audio, fs2)
+        
+        sig, sr = audio
+        
+        stft = AudioUtil.specgram(
+            sig,
+            Nft=Nft,
+            fs2=fs2
+        )
+        
+        mels = librosa.filters.mel(
+            sr=fs2,
+            n_fft=Nft,
+            n_mels=Nmel
+        )
+        
+        mels = mels[:, :-1]
+        
+        mels = mels / np.max(mels)
+        
+        melspec = np.dot(mels, stft)
         return melspec
 
     def spectro_aug_timefreq_masking(
@@ -310,7 +399,7 @@ class Feature_vector_DS:
         :param cls_index: Class name and index.
         """
         audio = self.get_audiosignal(cls_index)
-        AudioUtil.play(audio)
+        #AudioUtil.play(audio)
         plt.figure(figsize=(2 + 2 * len(audio[0]) / self.sr, 3))
         sgram = AudioUtil.melspectrogram(audio, Nmel=self.nmel, Nft=self.Nft)
         plt.imshow(
