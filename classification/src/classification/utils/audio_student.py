@@ -184,8 +184,7 @@ class AudioUtil:
         sig = np.real(np.fft.ifft(spectrum)) #GARDER partie reel de la transformation inverse
         return (sig, sr)
 
-    def add_bg(
-        audio, dataset, num_sources=1, max_ms=5000, amplitude_limit=0.1   #rempalce self par audio parce que ca marchait pas
+    def add_bg(audio, dataset, num_sources=1, max_ms=5000, amplitude_limit=0.1
     ) -> tuple[ndarray, int]:
         """
         Adds up sounds uniformly chosen at random to audio.
